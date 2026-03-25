@@ -4,6 +4,10 @@
 
 Headspace Engineering has become one of the most deeply embedded Cursor Teams deployments, growing from an initial rollout in April 2025 to **105+ weekly active developers** generating **3.8 million accepted lines of AI-assisted code**. Their usage patterns reveal an engineering organization that has moved far beyond experimentation -- Cursor is now a core part of how Headspace ships software. The team is bumping up against Teams-tier limits and would benefit significantly from Enterprise features including SSO/SCIM provisioning, advanced admin analytics, enforced privacy controls, and usage governance.
 
+## Quick Narrative
+
+In less than a year, Headspace Engineering went all-in on Cursor. What started as a small pilot in April 2025 exploded into a 105-person daily habit by September -- and they haven't looked back. Seven out of every ten developers on the team now use Agent mode every single week, trusting AI to make complex, multi-file changes across their codebase. The numbers tell the story: 3.8 million lines of AI-generated code accepted, 50,000+ AI requests per month at peak, and 27 power users who've each woven over 50,000 lines of AI output into production. They've already flipped on SSO, locked down privacy mode, and set up repo blocklists -- they're running Cursor like an enterprise tool on a Teams plan. Meanwhile, they're consistently blowing past their subscription limits (69% of requests were overages in peak months), their Cloud Agent usage has tripled and is now producing merged PRs, and they've onboarded 37+ new engineers in the last six months without any automated provisioning. Headspace doesn't need to be convinced that Cursor works -- the data proves their team has already rebuilt their development workflow around it. What they need now is the governance, cost controls, SCIM provisioning, audit logging, and agent oversight that only Enterprise provides.
+
 ---
 
 ## 1. Rapid, Sustained Adoption
