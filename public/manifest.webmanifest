@@ -1,0 +1,17 @@
+{
+  "name": "Lift Log",
+  "short_name": "Lift Log",
+  "description": "A mobile-first lifting tracker for a 12-week training block.",
+  "start_url": "/alex-fun-repo/",
+  "display": "standalone",
+  "background_color": "#070a10",
+  "theme_color": "#070a10",
+  "icons": [
+    {
+      "src": "/alex-fun-repo/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
