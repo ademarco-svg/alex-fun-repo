@@ -16,3 +16,16 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## Use it on your phone
+
+This app is set up to publish to GitHub Pages after the pull request is merged
+into `main`.
+
+Once GitHub Pages is enabled for the repository, open:
+
+```text
+https://ademarco-svg.github.io/alex-fun-repo/
+```
+
+On iPhone, tap Share, then Add to Home Screen to make it feel like a normal app.
