@@ -15,13 +15,15 @@ PRICING = {
     "auto": {"input": 1.25, "cache_write": 1.25, "cache_read": 0.25, "output": 6.0, "ctf_exempt": True},
     "claude-4-6-sonnet": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.3, "output": 15.0},
     "claude-4-7-opus": {"input": 5.0, "cache_write": 6.25, "cache_read": 0.5, "output": 25.0},
+    # Opus Fast Mode (limited research preview) — 6x normal Opus rates
+    "claude-4-7-opus-fast": {"input": 30.0, "cache_write": 37.5, "cache_read": 3.0, "output": 150.0},
     "claude-4-5-haiku": {"input": 1.0, "cache_write": 1.25, "cache_read": 0.1, "output": 5.0},
     "composer-2": {"input": 0.5, "cache_write": 0.5, "cache_read": 0.2, "output": 2.5},
     "composer-1.5": {"input": 3.5, "cache_write": 3.5, "cache_read": 0.35, "output": 17.5},
     "composer-1": {"input": 1.25, "cache_write": 1.25, "cache_read": 0.125, "output": 10.0},
     "gpt-5.5": {"input": 5.0, "cache_write": 5.0, "cache_read": 0.5, "output": 30.0},
-    "gpt-5.3-codex": {"input": 1.75, "cache_write": 1.75, "cache_read": 0.175, "output": 14.0},
     "gpt-5.4": {"input": 2.5, "cache_write": 2.5, "cache_read": 0.25, "output": 15.0},
+    "gpt-5.3-codex": {"input": 1.75, "cache_write": 1.75, "cache_read": 0.175, "output": 14.0},
     "gpt-5.2": {"input": 1.75, "cache_write": 1.75, "cache_read": 0.175, "output": 14.0},
     "gpt-5.2-codex": {"input": 1.75, "cache_write": 1.75, "cache_read": 0.175, "output": 14.0},
     "gpt-5": {"input": 1.25, "cache_write": 1.25, "cache_read": 0.125, "output": 10.0},
@@ -36,6 +38,19 @@ PRICING = {
 }
 
 AUTO_MODELS = {"default", "auto", "premium"}  # premium = Premium routing (Auto-tier pool)
+
+
+def _is_thinking_sonnet(m: str) -> bool:
+    return "sonnet" in m and "thinking" in m
+
+
+def _is_max_opus(m: str) -> bool:
+    """Highest-reasoning Opus tiers — preserve in Optimized to avoid quality regression."""
+    return ("opus" in m) and ("max" in m or "xhigh" in m)
+
+
+def _is_fast_opus(m: str) -> bool:
+    return "opus" in m and "fast" in m
 
 
 def normalize_model(name: str) -> str:
@@ -69,6 +84,8 @@ def classify_actual_model(model_name: str) -> str:
         return "gpt-5.1-codex-max"
     if m.startswith("gpt-5"):
         return "gpt-5"
+    if "opus" in m and "fast" in m:
+        return "claude-4-7-opus-fast"
     if "opus-4-7" in m or "opus-4.7" in m or "4-7-opus" in m:
         return "claude-4-7-opus"
     if "opus" in m:
@@ -93,17 +110,21 @@ def classify_actual_model(model_name: str) -> str:
 
 
 def map_all_anthropic(model_name: str) -> str:
-    """ALL Anthropic: Auto/Composer/intelligence → Sonnet; GPT/Codex → Opus 4.7."""
+    """ALL Anthropic: Auto/Composer/intelligence → Sonnet; GPT/Codex → Opus 4.7.
+    Opus Fast Mode users keep Opus Fast (top reasoning tier — credible peer would
+    be Opus Fast itself, not a downgrade)."""
     m = normalize_model(model_name)
     if m in AUTO_MODELS or m.startswith("premium"):
         return "claude-4-6-sonnet"
     if m.startswith("composer"):
         return "claude-4-6-sonnet"
+    if "opus" in m and "fast" in m:
+        return "claude-4-7-opus-fast"
+    if "opus" in m:
+        return "claude-4-7-opus"
     if m.startswith("gpt-5.5") or m.startswith("gpt-5.3-codex") or m.startswith("gpt-5.4"):
         return "claude-4-7-opus"
     if m.startswith("gpt-5"):
-        return "claude-4-7-opus"
-    if "opus" in m:
         return "claude-4-7-opus"
     if "haiku" in m:
         return "claude-4-5-haiku"
@@ -119,17 +140,70 @@ def map_all_anthropic(model_name: str) -> str:
 
 
 def map_optimized(model_name: str) -> str:
-    """Optimized: Opus → GPT 5.5; Sonnet → Composer 2; Auto unchanged; Composer → C2."""
+    """Optimized (Aggressive) — biggest savings while keeping every swap defensible.
+
+    Design principles:
+      • Never demote `*-opus-max-*` — these users explicitly demanded peak reasoning.
+        Keep them on Opus 4.7.
+      • Opus Fast Mode (limited research preview at 6x rates) → standard Opus 4.7.
+        Same model, normal Cursor pricing — zero quality regression.
+      • Top-tier Opus thinking (`xhigh`) → GPT 5.5. OpenAI's peer top-reasoning
+        model. Pricing is comparable per-token.
+      • Workhorse high-thinking Opus (the bulk of the Opus pool) → GPT 5.4. Per
+        Cursor docs GPT 5.4 is "agentic and reasoning capabilities" with Max Mode
+        and 90% cache-input discount. For Cursor's core agentic coding workloads
+        it's a credible peer at ~½ the rate of Opus and ~½ the rate of GPT 5.5.
+      • Sonnet thinking variants stay on Sonnet — preserves reasoning depth.
+      • Workhorse non-thinking Sonnet → Composer 2 (Cursor's Sonnet-class agent).
+      • Composer 1 / Composer 1.5 → Composer 2 — strict newer-gen upgrade *and*
+        cheaper. No-brainer.
+      • Codex / Gemini / Grok / Kimi / Auto unchanged.
+    """
     m = normalize_model(model_name)
     if m in AUTO_MODELS or m.startswith("premium"):
         return "auto"
-    if "opus" in m or "opus-4-7" in m or "4-7-opus" in m:
-        return "gpt-5.5"
+    if "opus" in m:
+        if _is_fast_opus(m):
+            return "claude-4-7-opus"
+        if "max" in m:
+            return "claude-4-7-opus"
+        if "xhigh" in m:
+            return "gpt-5.5"
+        return "gpt-5.4"
     if "sonnet" in m:
+        if "thinking" in m:
+            return "claude-4-6-sonnet"
         return "composer-2"
-    if m.startswith("composer"):
+    if m.startswith("composer-1"):
         return "composer-2"
-    # Codex / mid-tier GPT → keep actual (already efficient)
+    if m.startswith("composer-2"):
+        return "composer-2"
+    return classify_actual_model(model_name)
+
+
+def map_optimized_conservative(model_name: str) -> str:
+    """Optimized (Conservative) — only swaps that preserve like-for-like quality.
+
+    Differences from aggressive: all Opus thinking variants (high / xhigh / max)
+    stay on Opus 4.7 — no OpenAI swap for any explicitly-thinking workload. Savings
+    come only from Opus Fast Mode → Opus standard, Sonnet non-thinking → Composer 2,
+    and Composer 1 / 1.5 → Composer 2. CTF still applies.
+    """
+    m = normalize_model(model_name)
+    if m in AUTO_MODELS or m.startswith("premium"):
+        return "auto"
+    if "opus" in m:
+        if _is_fast_opus(m):
+            return "claude-4-7-opus"
+        return "claude-4-7-opus"  # all Opus thinking stays on Opus
+    if "sonnet" in m:
+        if "thinking" in m:
+            return "claude-4-6-sonnet"
+        return "composer-2"
+    if m.startswith("composer-1"):
+        return "composer-2"
+    if m.startswith("composer-2"):
+        return "composer-2"
     return classify_actual_model(model_name)
 
 
@@ -162,6 +236,10 @@ def scenario_cost(row, scenario: str) -> float:
         return token_cost(row, key, apply_ctf=False)
     if scenario == "optimized":
         key = map_optimized(model)
+        apply_ctf = key != "auto"
+        return token_cost(row, key, apply_ctf)
+    if scenario == "optimized_conservative":
+        key = map_optimized_conservative(model)
         apply_ctf = key != "auto"
         return token_cost(row, key, apply_ctf)
     raise ValueError(scenario)
@@ -242,11 +320,13 @@ def main():
     scenarios = {
         "status_quo": "Status Quo (+$0.25/M CTF)",
         "all_anthropic": "ALL Anthropic",
-        "optimized": "Optimized (+CTF)",
+        "optimized_conservative": "Optimized — Conservative",
+        "optimized": "Optimized — Aggressive",
     }
     colors = {
         "status_quo": "#4C78A8",
         "all_anthropic": "#F58518",
+        "optimized_conservative": "#9ECAE1",
         "optimized": "#54A24B",
     }
 
@@ -268,12 +348,14 @@ def main():
     months = sorted(costs["month"].unique())
 
     # Chart 1: Team monthly trend
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    fig2, ax2 = plt.subplots(figsize=(11, 5))
+    n = len(scenarios)
     x = np.arange(len(months))
-    width = 0.25
+    width = 0.8 / n
     for i, (scenario, label) in enumerate(scenarios.items()):
         vals = [summary[(summary.month == m) & (summary.scenario == scenario)]["cost"].sum() for m in months]
-        ax2.bar(x + (i - 1) * width, vals, width=width, label=label, color=colors[scenario])
+        offset = (i - (n - 1) / 2.0) * width
+        ax2.bar(x + offset, vals, width=width, label=label, color=colors[scenario])
     ax2.set_xticks(x)
     ax2.set_xticklabels(months)
     ax2.set_ylabel("Team cost ($)")
@@ -290,7 +372,7 @@ def main():
     top_users = user_sq.nlargest(20).index.tolist()
     top_labels = {e: short_label(e) for e in top_users}
 
-    fig, axes = plt.subplots(1, len(months), figsize=(6 * len(months), 12), sharey=True)
+    fig, axes = plt.subplots(1, len(months), figsize=(6 * len(months), 13), sharey=True)
     if len(months) == 1:
         axes = [axes]
 
@@ -300,14 +382,16 @@ def main():
         pivot = pivot.reindex(top_users).fillna(0)
         pivot.index = [top_labels[e] for e in pivot.index]
 
+        n = len(scenarios)
         y = np.arange(len(pivot))
-        height = 0.25
+        height = 0.8 / n
         for i, scenario in enumerate(scenarios):
             if scenario in pivot.columns:
                 vals = pivot[scenario].values
             else:
                 vals = np.zeros(len(pivot))
-            ax.barh(y + (i - 1) * height, vals, height=height, label=scenarios[scenario], color=colors[scenario])
+            offset = (i - (n - 1) / 2.0) * height
+            ax.barh(y + offset, vals, height=height, label=scenarios[scenario], color=colors[scenario])
 
         ax.set_yticks(y)
         ax.set_yticklabels(pivot.index, fontsize=7)
@@ -374,12 +458,15 @@ def main():
 
     sq = summary[summary.scenario == "status_quo"]["cost"].sum()
     opt = summary[summary.scenario == "optimized"]["cost"].sum()
+    opt_c = summary[summary.scenario == "optimized_conservative"]["cost"].sum()
     ant = summary[summary.scenario == "all_anthropic"]["cost"].sum()
     print("\n=== 3-month totals ===")
-    print(f"Status Quo:      ${sq:,.0f}")
-    print(f"ALL Anthropic:   ${ant:,.0f} ({(ant/sq-1)*100:+.1f}% vs status quo)")
-    print(f"Optimized:       ${opt:,.0f} ({(opt/sq-1)*100:+.1f}% vs status quo)")
-    print(f"\nOptimized savings vs Status Quo: ${sq - opt:,.0f} ({(1-opt/sq)*100:.1f}%)")
+    print(f"Status Quo:                  ${sq:,.0f}")
+    print(f"ALL Anthropic:               ${ant:,.0f} ({(ant/sq-1)*100:+.1f}% vs status quo)")
+    print(f"Optimized (Conservative):    ${opt_c:,.0f} ({(opt_c/sq-1)*100:+.1f}% vs status quo)")
+    print(f"Optimized (Aggressive):      ${opt:,.0f} ({(opt/sq-1)*100:+.1f}% vs status quo)")
+    print(f"\nConservative savings: ${sq - opt_c:,.0f} ({(1-opt_c/sq)*100:.1f}%)")
+    print(f"Aggressive savings:   ${sq - opt:,.0f}  ({(1-opt/sq)*100:.1f}%)")
 
 
 if __name__ == "__main__":
